@@ -35,31 +35,33 @@ print '*** Reading key schema from %s table' % src_table
 src = ddbc.describe_table(src_table)['Table']
 hash_key = ''
 range_key = ''
+
 for schema in src['KeySchema']:
     attr_name = schema['AttributeName']
     key_type = schema['KeyType']
     if key_type == 'HASH':
         hash_key = attr_name
+        hash_key_type = [ x["AttributeType"] for x in src['AttributeDefinitions'] if x["AttributeName"] == hash_key ][0]
     elif key_type == 'RANGE':
         range_key = attr_name
+        range_key_type = [ x["AttributeType"] for x in src['AttributeDefinitions'] if x["AttributeName"] == range_key ][0]
 
 # 2. Create the new table
 table_struct = None
+schema=[HashKey(hash_key, data_type=hash_key_type)]
+if range_key != '':
+    schema.append(RangeKey(range_key, data_type=range_key_type))
+
 try:
     new_logs = Table(dst_table,
                      connection=ddbc,
-                     schema=[HashKey(hash_key),
-                             RangeKey(range_key),
-                             ]
+                     schema=schema
                      )
 
     table_struct = new_logs.describe()
     print 'Table %s already exists' % dst_table
     sys.exit(0)
 except JSONResponseError:
-    schema = [HashKey(hash_key)]
-    if range_key != '':
-        schema.append(RangeKey(range_key))
     new_logs = Table.create(dst_table,
                             connection=ddbc,
                             schema=schema,
